@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys
 import subprocess
 import os
@@ -12,10 +14,65 @@ from PyQt5.QtGui import *
 # Get the directory where the script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# For Flatpak, try multiple theme locations
+def load_themes():
+    possible_paths = [
+        os.path.join(SCRIPT_DIR, "themes.json"),
+        os.path.join("/app/share/media-catcher", "themes.json"),
+        os.path.join(os.path.expanduser("~/.var/app/io.github.MarkusAureus.MediaCatcher/data"), "themes.json"),
+        "themes.json"
+    ]
+    
+    for path in possible_paths:
+        try:
+            if os.path.exists(path):
+                with open(path, "r") as f:
+                    return json.load(f)
+        except Exception as e:
+            print(f"Could not load themes from {path}: {e}")
+    
+    # Fallback themes if file not found
+    return {
+        "Blueberry": {
+            "appearance": "Dark",
+            "bg_color": "#1a1a2e",
+            "button_color": "#A066D7",
+            "hover_color": "#8847C0"
+        },
+        "Light": {
+            "appearance": "Light",
+            "bg_color": "#f5f5f5",
+            "button_color": "#3B82F6",
+            "hover_color": "#2563EB"
+        },
+        "YT Theme": {
+            "appearance": "Dark",
+            "bg_color": "#0f0f0f",
+            "button_color": "#FF0000",
+            "hover_color": "#CC0000"
+        },
+        "Matrix": {
+            "appearance": "Dark",
+            "bg_color": "#000000",
+            "button_color": "#00FF00",
+            "hover_color": "#00CC00"
+        },
+        "Ocean": {
+            "appearance": "Dark",
+            "bg_color": "#0d1117",
+            "button_color": "#58a6ff",
+            "hover_color": "#1f6feb"
+        },
+        "Sunset": {
+            "appearance": "Dark",
+            "bg_color": "#1a1625",
+            "button_color": "#ff6b6b",
+            "hover_color": "#ee5a6f"
+        }
+    }
+
 # === Load Themes ===
-themes_path = os.path.join(SCRIPT_DIR, "themes.json")
-with open(themes_path, "r") as f:
-    THEMES = json.load(f)
+THEMES = load_themes()
 
 # === Global variables for process control ===
 current_process = None
@@ -175,15 +232,16 @@ class MediaCatcher(QMainWindow):
         self.setWindowTitle("Media Catcher")
         self.setFixedSize(700, 700)
         
-        # Set window icon - try multiple formats and locations
+        # Set window icon - try multiple formats and locations for Flatpak
         icon_loaded = False
         
-        # Try SVG first
+        # Try SVG first - Flatpak paths with correct naming
         svg_paths = [
-            os.path.join(SCRIPT_DIR, "media-catcher.svg"),
-            "media-catcher.svg",
-            "/usr/share/icons/hicolor/scalable/apps/media-catcher.svg",
-            os.path.expanduser("~/.local/share/icons/media-catcher.svg")
+            os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.svg"),
+            "/app/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
+            "/usr/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
+            os.path.expanduser("~/.local/share/icons/io.github.MarkusAureus.MediaCatcher.svg"),
+            "io.github.MarkusAureus.MediaCatcher.svg"
         ]
         
         for svg_path in svg_paths:
@@ -195,13 +253,15 @@ class MediaCatcher(QMainWindow):
                     icon_loaded = True
                     break
         
-        # Try PNG if SVG failed
+        # Try PNG if SVG failed - Flatpak paths with correct naming
         if not icon_loaded:
             png_paths = [
-                os.path.join(SCRIPT_DIR, "media-catcher.png"),
-                "media-catcher.png",
-                "/usr/share/pixmaps/media-catcher.png",
-                os.path.expanduser("~/.local/share/icons/media-catcher.png")
+                os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.png"),
+                "/app/share/icons/hicolor/256x256/apps/io.github.MarkusAureus.MediaCatcher.png",
+                "/app/share/pixmaps/io.github.MarkusAureus.MediaCatcher.png",
+                "/usr/share/pixmaps/io.github.MarkusAureus.MediaCatcher.png",
+                os.path.expanduser("~/.local/share/icons/io.github.MarkusAureus.MediaCatcher.png"),
+                "io.github.MarkusAureus.MediaCatcher.png"
             ]
             
             for png_path in png_paths:
@@ -257,7 +317,7 @@ class MediaCatcher(QMainWindow):
         playlist_layout.addWidget(self.checkbox_playlist)
         playlist_layout.addStretch()
         layout.addLayout(playlist_layout)
-        
+
         # Audio options
         self.audio_options_widget = QWidget()
         audio_layout = QVBoxLayout(self.audio_options_widget)
@@ -746,21 +806,22 @@ if __name__ == "__main__":
     # Create QApplication first
     app = QApplication(sys.argv)
     
-    # Set application metadata
+    # Set application metadata for Flatpak
     app.setApplicationName("MediaCatcher")
-    app.setOrganizationName("MediaCatcher")
+    app.setOrganizationName("MarkusAureus")
     app.setApplicationDisplayName("Media Catcher")
-    app.setDesktopFileName("media-catcher")
+    app.setDesktopFileName("io.github.MarkusAureus.MediaCatcher")
     
-    # Set application icon with multiple fallbacks
+    # Set application icon with multiple fallbacks for Flatpak
     icon_loaded = False
     
-    # Try SVG icons
+    # Try SVG icons with correct Flatpak naming
     svg_paths = [
-        os.path.join(SCRIPT_DIR, "media-catcher.svg"),
-        "media-catcher.svg",
-        "/usr/share/icons/hicolor/scalable/apps/media-catcher.svg",
-        os.path.expanduser("~/.local/share/icons/media-catcher.svg")
+        os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.svg"),
+        "/app/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
+        "/usr/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
+        os.path.expanduser("~/.local/share/icons/io.github.MarkusAureus.MediaCatcher.svg"),
+        "io.github.MarkusAureus.MediaCatcher.svg"
     ]
     
     for svg_path in svg_paths:
@@ -772,13 +833,15 @@ if __name__ == "__main__":
                 icon_loaded = True
                 break
     
-    # Try PNG if SVG failed
+    # Try PNG if SVG failed with correct Flatpak naming
     if not icon_loaded:
         png_paths = [
-            os.path.join(SCRIPT_DIR, "media-catcher.png"),
-            "media-catcher.png",
-            "/usr/share/pixmaps/media-catcher.png",
-            os.path.expanduser("~/.local/share/icons/media-catcher.png")
+            os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.png"),
+            "/app/share/icons/hicolor/256x256/apps/io.github.MarkusAureus.MediaCatcher.png",
+            "/app/share/pixmaps/io.github.MarkusAureus.MediaCatcher.png",
+            "/usr/share/pixmaps/io.github.MarkusAureus.MediaCatcher.png",
+            os.path.expanduser("~/.local/share/icons/io.github.MarkusAureus.MediaCatcher.png"),
+            "io.github.MarkusAureus.MediaCatcher.png"
         ]
         
         for png_path in png_paths:
