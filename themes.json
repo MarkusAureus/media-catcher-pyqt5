@@ -1,0 +1,20 @@
+{
+    "Dark": {
+        "appearance": "Dark",
+        "bg_color": "default",
+        "button_color": "#A066D7",
+        "hover_color": "#8847C0"
+    },
+    "YT Theme": {
+        "appearance": "Dark",
+        "bg_color": "#000000",
+        "button_color": "#FF0000",
+        "hover_color": "#CC0000"
+    },
+    "Matrix": {
+        "appearance": "Dark",
+        "bg_color": "#000000",
+        "button_color": "#00FF00",
+        "hover_color": "#00CC00"
+    }
+}
