@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.MarkusAureus.MediaCatcher</id>
+  <name>Media Catcher</name>
+  <summary>Download audio and video from various websites</summary>
+  <summary xml:lang="sk">Sťahovanie audio a videa z rôznych webových stránok</summary>
+  
+  <description>
+    <p>
+      Media Catcher is a user-friendly desktop application for downloading audio and video content from various websites including YouTube. 
+      It provides an intuitive interface with customizable themes and supports playlist downloads, subtitle extraction, and multiple quality options.
+    </p>
+    <p xml:lang="sk">
+      Media Catcher je používateľsky prívetivá desktopová aplikácia na sťahovanie audio a video obsahu z rôznych webových stránok vrátane YouTube. 
+      Poskytuje intuitívne rozhranie s prispôsobiteľnými témami a podporuje sťahovanie playlistov, extrakciu titulkov a viacero možností kvality.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Download audio in various formats (MP3, WAV, AAC)</li>
+      <li>Download video with customizable quality settings</li>
+      <li>Support for playlists and individual videos</li>
+      <li>Subtitle download with multiple language options</li>
+      <li>Multiple themes for customization</li>
+      <li>Progress tracking and download management</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.yourname.MediaCatcher.desktop</launchable>
+  <provides>
+    <binary>media-catcher</binary>
+  </provides>
+  
+  <screenshots>
+    <screenshot type="default">
+      <caption>Main interface of Media Catcher</caption>
+      <image>https://your-website.com/screenshots/media-catcher-main.png</image>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://your-website.com</url>
+  <url type="bugtracker">https://github.com/yourusername/media-catcher/issues</url>
+  <url type="help">https://github.com/yourusername/media-catcher/wiki</url>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0+</project_license>
+
+  <releases>
+    <release version="1.0.0" date="2025-06-04">
+      <description>
+        <p>Initial release of Media Catcher</p>
+        <ul>
+          <li>Audio and video downloading functionality</li>
+          <li>Multiple theme support</li>
+          <li>Playlist support</li>
+          <li>Subtitle extraction</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-info">mild</content_attribute>
+  </content_rating>
+</component>
