@@ -1,0 +1,99 @@
+# io.github.MarkusAureus.MediaCatcher.yaml
+
+app-id: io.github.MarkusAureus.MediaCatcher
+runtime: org.freedesktop.Platform
+runtime-version: '23.08' # Použi aktuálnu stabilnú verziu, ktorá je dostupná na Flathube.
+sdk: org.freedesktop.Sdk
+command: media-catcher # Toto je názov spustiteľného súboru, ktorý sa nainštaluje do /app/bin
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=xdg-download # Prístup k adresáru Stiahnuté súbory
+  # - --filesystem=home # Odstránené - príliš široké povolenie. Ak je absolútne potrebné, zváž konkrétnejšie cesty alebo to odôvodni Flathubu.
+  - --talk-name=org.freedesktop.Notifications # Ak aplikácia odosiela notifikácie
+  - --env=QT_QPA_PLATFORM=xcb # Dôležité pre PyQt5 na X11
+  # Ak chceš, aby aplikácia otvárala URL adresy (MimeType v .desktop súbore), pridaj tieto:
+  # - --own-name=org.freedesktop.portal.OpenURI
+  # - --talk-name=org.freedesktop.portal.OpenURI
+
+modules:
+  # Modul pre PyQt5
+  # Inštalácia PyQt5 a PyQt5-sip z tar.gz súborov.
+  # Je to funkčné, ale niekedy môže byť jednoduchšie nechať Flatpak runtime poskytnúť PyQt5,
+  # alebo ho nainštalovať priamo cez pip z PyPI bez špecifických URL, ak je to možné.
+  - name: python3-PyQt5
+    buildsystem: simple
+    build-commands:
+      - pip3 install --exists-action=i --no-index --find-links="file://${PWD}" --prefix=${FLATPAK_DEST} PyQt5 PyQt5-sip
+    sources:
+      # AKTUALIZOVANÉ pre PyQt5-5.15.11.tar.gz
+      - type: file
+        url: https://files.pythonhosted.org/packages/fd/a4/5743ebb4a27b4b1a51c6d8ef455c4c1b5d610c90d2934c7f802b5c1557c52/PyQt5-5.15.11.tar.gz
+        sha256: fda45743ebb4a27b4b1a51c6d8ef455c4c1b5d610c90d2934c7f802b5c1557c52
+      # AKTUALIZOVANÉ pre PyQt5_sip-12.17.0.tar.gz
+      - type: file
+        url: https://files.pythonhosted.org/packages/68/2d/dadcbd2239af9fdc0c0628e2776b820e128bec88b49b8d692fe682f90b4f/PyQt5_sip-12.17.0.tar.gz
+        sha256: 682dadcbd2239af9fdc0c0628e2776b820e1ef37bdaffc0e937bdaffc0e93312edae2cd7da25b953971d91
+
+  # Modul pre yt-dlp
+  # Podobne ako pri PyQt5, zváž inštaláciu priamo z PyPI (bez --find-links), ak je to možné.
+  - name: yt-dlp
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-index --find-links="file://${PWD}" --prefix=${FLATPAK_DEST} yt-dlp
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/source/y/yt-dlp/yt_dlp-2024.5.27-py3-none-any.whl
+        sha256: 3b44e629d88b1c8c69c80592773d83249bd00119b0468aa0506a9e7acdbfac98
+
+  # Modul pre FFmpeg a jeho závislosť libwebp
+  - name: ffmpeg
+    config-opts:
+      - --enable-shared
+      - --disable-static
+      - --enable-gnutls
+      - --disable-doc
+      - --disable-programs
+      - --enable-encoder=png,libwebp
+      - --enable-libwebp
+    sources:
+      - type: archive
+        url: https://ffmpeg.org/releases/ffmpeg-6.1.1.tar.xz
+        sha256: 8684f4b00f94b85461884c3719382f1261f0d9eb3d59640a1f4ac0873616f968
+    modules:
+      - name: libwebp
+        config-opts:
+          - --disable-static
+          - --enable-libwebpmux
+          - --enable-libwebpdemux
+        sources:
+          - type: archive
+            url: https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.3.2.tar.gz
+            sha256: 2a499607df669e40258e53d0ade8035ba4ec0175244869d1025d460562aa09b4
+
+  # Hlavný modul tvojej aplikácie MediaCatcher
+  - name: media-catcher
+    buildsystem: simple
+    build-commands:
+      # Inštalácia Python skriptu ako spustiteľného súboru
+      - install -Dm755 media-catcher.py ${FLATPAK_DEST}/bin/media-catcher
+      # Inštalácia ostatných súborov aplikácie
+      - install -Dm644 themes.json ${FLATPAK_DEST}/share/media-catcher/themes.json
+      # Ikona aplikácie
+      - install -Dm644 io.github.MarkusAureus.MediaCatcher.svg ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg
+      # Desktop súbor
+      - install -Dm644 io.github.MarkusAureus.MediaCatcher.desktop ${FLATPAK_DEST}/share/applications/io.github.MarkusAureus.MediaCatcher.desktop
+      # Metainfo XML súbor
+      - install -Dm644 io.github.MarkusAureus.MediaCatcher.metainfo.xml ${FLATPAK_DEST}/share/metainfo/io.github.MarkusAureus.MediaCatcher.metainfo.xml
+      # Prípadne ďalšie súbory ako README, LICENSE, ak ich chceš mať v inštalácii
+      - install -Dm644 README.md ${FLATPAK_DEST}/share/doc/io.github.MarkusAureus.MediaCatcher/README.md
+      - install -Dm644 LICENSE ${FLATPAK_DEST}/share/doc/io.github.MarkusAureus.MediaCatcher/LICENSE
+    sources:
+      # Zdrojový kód aplikácie je v tomto istom repozitári Flathubu
+      - type: git
+        url: . # Bodka znamená, že zdroj je aktuálny git repozitár
+        tag: v1.0.0 # Vždy používaj tag pre stabilné verzie
+        # commit: <HASH_TVOJHO_KOMITU> # Odstránené, ak používaš tag. Ak potrebuješ špecifický commit, odstráň 'tag' riadok a nahraď tento hashom.
