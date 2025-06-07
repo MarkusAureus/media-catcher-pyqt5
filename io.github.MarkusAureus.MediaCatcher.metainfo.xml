@@ -7,11 +7,11 @@
   
   <description>
     <p>
-      Media Catcher is a user-friendly desktop application for downloading audio and video content from various websites including YouTube. 
+      Media Catcher is a user-friendly desktop application for downloading audio and video content from various websites.
       It provides an intuitive interface with customizable themes and supports playlist downloads, subtitle extraction, and multiple quality options.
     </p>
     <p xml:lang="sk">
-      Media Catcher je používateľsky prívetivá desktopová aplikácia na sťahovanie audio a video obsahu z rôznych webových stránok vrátane YouTube. 
+      Media Catcher je používateľsky prívetivá desktopová aplikácia na sťahovanie audio a video obsahu z rôznych webových stránok. 
       Poskytuje intuitívne rozhranie s prispôsobiteľnými témami a podporuje sťahovanie playlistov, extrakciu titulkov a viacero možností kvality.
     </p>
     <p>Features:</p>
@@ -33,13 +33,16 @@
   <screenshots>
     <screenshot type="default">
       <caption>Main interface of Media Catcher</caption>
-      <image>https://your-website.com/screenshots/media-catcher-main.png</image>
+      <image>https://github.com/MarkusAureus/media-catcher-pyqt5/screenshot_1.png</image>
+      <image>https://github.com/MarkusAureus/media-catcher-pyqt5/screenshot_2.png</image>
+      <image>https://github.com/MarkusAureus/media-catcher-pyqt5/screenshot_3.png</image>
+      <image>https://github.com/MarkusAureus/media-catcher-pyqt5/screenshot_4.png</image>
     </screenshot>
   </screenshots>
 
-  <url type="homepage">https://your-website.com</url>
-  <url type="bugtracker">https://github.com/yourusername/media-catcher/issues</url>
-  <url type="help">https://github.com/yourusername/media-catcher/wiki</url>
+  <url type="homepage">https://github.com/MarkusAureus</url>
+  <url type="bugtracker">https://github.com/MarkusAureus/media-catcher-pyqt5/issues</url>
+  <url type="help">https://github.com/MarkusAureus/media-catcher-pyqt5/wiki</url>
 
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0+</project_license>
