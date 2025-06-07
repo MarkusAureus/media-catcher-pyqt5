@@ -15,8 +15,11 @@ Media Catcher is a modern, user-friendly GUI application built on top of yt-dlp 
 - **Custom Output Folder** - Save downloads to any location you choose
 - **Built with PyQt5** - Modern, responsive cross-platform interface
 
-## 📱 Screenshot
-![](screenshot.png)
+## 📱 Screenshots
+![](screenshot_1.png)
+![](screenshot_2.png)
+![](screenshot_3.png)
+![](screenshot_4.png)
 
 ## 📋 Requirements
 
