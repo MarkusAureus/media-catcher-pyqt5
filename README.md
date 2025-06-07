@@ -4,7 +4,7 @@ Media Catcher is a modern, user-friendly GUI application built on top of yt-dlp 
 
 ## ✨ Features
 
-- **Download Videos & Audio** - From over 1000 supported platforms and websites including YouTube, Vimeo, and many more
+- **Download Videos & Audio** - From over 1000 supported platforms and websites.
 - **Playlist Support** - Download entire playlists or individual videos with smart playlist detection
 - **Multiple Audio Formats** - MP3, WAV, AAC with quality options (64K-320K)
 - **Video Quality Selection** - From 240p to 1080p or best available quality
