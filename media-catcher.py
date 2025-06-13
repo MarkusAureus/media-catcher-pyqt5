@@ -1,26 +1,44 @@
 #!/usr/bin/env python3
 
+# -----------------------------------------------------------------------------
+# -- MEDIA CATCHER - A PYQT5-BASED YT-DLP FRONTEND                           --
+# -- Author: Markus Aureus                                                   --
+# -- Date: [Date of Last Edit]                                               --
+# -- Description: A cross-platform desktop application for downloading media --
+# --              using yt-dlp. Built with PyQt5 for a native look and feel, --
+# --              featuring theming, and robust playlist handling.           --
+# -----------------------------------------------------------------------------
+
+# --- Standard Library Imports ---
 import sys
-import subprocess
 import os
 import threading
 import re
 import json
+import subprocess
 from urllib.parse import urlparse
+
+# --- Third-party Library Imports ---
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 
-# Get the directory where the script is located
+# --- Global Configuration ---
+# Get the directory where the script is located for relative path access.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# For Flatpak, try multiple theme locations
 def load_themes():
+    """
+    Loads theme definitions from a JSON file.
+    It checks multiple standard locations, making it compatible with
+    local execution and Flatpak installations.
+    If no themes.json is found, it returns a hardcoded dictionary of fallback themes.
+    """
     possible_paths = [
         os.path.join(SCRIPT_DIR, "themes.json"),
-        os.path.join("/app/share/media-catcher", "themes.json"),
-        os.path.join(os.path.expanduser("~/.var/app/io.github.MarkusAureus.MediaCatcher/data"), "themes.json"),
-        "themes.json"
+        "/app/share/media-catcher/themes.json",  # Standard Flatpak data path
+        os.path.expanduser("~/.var/app/io.github.MarkusAureus.MediaCatcher/data/themes.json"), # User-specific Flatpak data
+        "themes.json" # Fallback for current working directory
     ]
     
     for path in possible_paths:
@@ -31,58 +49,32 @@ def load_themes():
         except Exception as e:
             print(f"Could not load themes from {path}: {e}")
     
-    # Fallback themes if file not found
+    # Fallback themes if no file is found
     return {
-        "Blueberry": {
-            "appearance": "Dark",
-            "bg_color": "#1a1a2e",
-            "button_color": "#A066D7",
-            "hover_color": "#8847C0"
-        },
-        "Light": {
-            "appearance": "Light",
-            "bg_color": "#f5f5f5",
-            "button_color": "#3B82F6",
-            "hover_color": "#2563EB"
-        },
-        "YT Theme": {
-            "appearance": "Dark",
-            "bg_color": "#0f0f0f",
-            "button_color": "#FF0000",
-            "hover_color": "#CC0000"
-        },
-        "Matrix": {
-            "appearance": "Dark",
-            "bg_color": "#000000",
-            "button_color": "#00FF00",
-            "hover_color": "#00CC00"
-        },
-        "Ocean": {
-            "appearance": "Dark",
-            "bg_color": "#0d1117",
-            "button_color": "#58a6ff",
-            "hover_color": "#1f6feb"
-        },
-        "Sunset": {
-            "appearance": "Dark",
-            "bg_color": "#1a1625",
-            "button_color": "#ff6b6b",
-            "hover_color": "#ee5a6f"
-        }
+        "Blueberry": {"appearance": "Dark", "bg_color": "#1a1a2e", "button_color": "#A066D7", "hover_color": "#8847C0"},
+        "Light": {"appearance": "Light", "bg_color": "#f5f5f5", "button_color": "#3B82F6", "hover_color": "#2563EB"},
+        "YT Theme": {"appearance": "Dark", "bg_color": "#0f0f0f", "button_color": "#FF0000", "hover_color": "#CC0000"},
+        "Matrix": {"appearance": "Dark", "bg_color": "#000000", "button_color": "#00FF00", "hover_color": "#00CC00"},
+        "Ocean": {"appearance": "Dark", "bg_color": "#0d1117", "button_color": "#58a6ff", "hover_color": "#1f6feb"},
+        "Sunset": {"appearance": "Dark", "bg_color": "#1a1625", "button_color": "#ff6b6b", "hover_color": "#ee5a6f"}
     }
 
-# === Load Themes ===
+# Load themes at startup.
 THEMES = load_themes()
 
-# === Global variables for process control ===
+# --- Global variables for process and state management ---
 current_process = None
-is_downloading = False
 stop_requested = False
-output_dir = os.path.expanduser("~/Downloads")
+output_dir = os.path.expanduser("~/Downloads") # Default output directory
 
 class DownloadThread(QThread):
+    """
+    Handles the download process in a separate thread to prevent the GUI from freezing.
+    It emits signals to update the main window's progress bar and status labels.
+    """
+    # Signals to communicate with the main UI thread
     progress = pyqtSignal(float)
-    status = pyqtSignal(str, str)
+    status = pyqtSignal(str, str) # Message and color
     finished = pyqtSignal()
     
     def __init__(self, urls, mode, download_playlist, download_subs, subtitle_lang, output_dir):
@@ -95,60 +87,53 @@ class DownloadThread(QThread):
         self.output_dir = output_dir
         
     def run(self):
+        """
+        The core worker method. This constructs and executes the yt-dlp command.
+        """
         global current_process, stop_requested
         
+        # --- Pre-computation of URLs and video counts ---
+        # This section analyzes the input URLs to provide an accurate total video count.
         all_urls = []
-        download_info = []
+        download_info = [] # Stores metadata for each URL (count, type, etc.)
         
         for url in self.urls:
             if is_playlist_url(url) and self.download_playlist:
-                playlist_count = get_playlist_count(url)
-                if playlist_count > 0:
-                    all_urls.append(url)
-                    download_info.append({"url": url, "count": playlist_count, "type": "full_playlist"})
-                else:
-                    all_urls.append(url)
-                    download_info.append({"url": url, "count": 1, "type": "single"})
+                count = get_playlist_count(url)
+                all_urls.append(url)
+                download_info.append({"url": url, "count": count, "type": "full_playlist"})
             elif is_playlist_url(url) and not self.download_playlist:
                 self.status.emit("⚠️ Playlist detected - downloading first video only", "orange")
                 all_urls.append(url)
                 download_info.append({"url": url, "count": 1, "type": "single"})
             elif is_video_from_playlist(url) and self.download_playlist:
-                video_index = get_video_index_from_url(url)
+                start_index = get_video_index_from_url(url)
                 total_count = get_playlist_count(url)
-                remaining_count = max(1, total_count - video_index + 1)
-                self.status.emit(f"📋 Downloading playlist from video #{video_index} to end", "cyan")
+                remaining = max(1, total_count - start_index + 1)
+                self.status.emit(f"📋 Downloading playlist from video #{start_index}", "cyan")
                 all_urls.append(url)
-                download_info.append({"url": url, "count": remaining_count, "type": "partial_playlist", "start_index": video_index})
-            elif is_video_from_playlist(url) and not self.download_playlist:
+                download_info.append({"url": url, "count": remaining, "type": "partial_playlist"})
+            else: # Standard video URL or single video from a playlist
                 clean_url = url.split('&list=')[0] if '&list=' in url else url
                 all_urls.append(clean_url)
                 download_info.append({"url": clean_url, "count": 1, "type": "single"})
-            else:
-                all_urls.append(url)
-                download_info.append({"url": url, "count": 1, "type": "single"})
 
         total_videos = sum(info["count"] for info in download_info)
         current_video = 0
         
-        for index, (url, info) in enumerate(zip(all_urls, download_info), start=1):
-            if stop_requested:
-                break
-                
-            if info["type"] in ["full_playlist", "partial_playlist"]:
-                self.status.emit(f"⬇️ Starting playlist download...", "white")
-            else:
-                current_video += 1
-                self.status.emit(f"⬇️ Downloading ({current_video}/{total_videos})...", "white")
-
+        # --- Main Download Loop ---
+        for url, info in zip(all_urls, download_info):
+            if stop_requested: break
+            
+            # --- Construct yt-dlp command ---
             output_path = os.path.join(self.output_dir, "%(title)s.%(ext)s")
-            cmd = ["yt-dlp", url, "-o", output_path, "--newline"]
+            cmd = ["yt-dlp", url, "-o", output_path, "--newline", "--ignore-errors"]
 
-            if is_playlist_url(url) and not self.download_playlist:
+            # Add mode-specific and playlist-specific arguments
+            if info["type"] == "single" and is_playlist_url(url):
                 cmd.extend(["--playlist-items", "1"])
-            elif is_video_from_playlist(url) and self.download_playlist:
-                video_index = get_video_index_from_url(url)
-                cmd.extend(["--playlist-start", str(video_index)])
+            elif info["type"] == "partial_playlist":
+                cmd.extend(["--playlist-start", str(get_video_index_from_url(url))])
 
             if self.mode == "Audio":
                 audio_format = window.combo_audio_format.currentText()
@@ -157,155 +142,108 @@ class DownloadThread(QThread):
                     quality = window.combo_quality_audio.currentText()
                     quality_map = {"320K": "0", "192K": "2", "128K": "5", "64K": "9"}
                     cmd.extend(["--audio-quality", quality_map.get(quality, "2")])
-            else:
+            else: # Video Mode
                 cmd.extend(["--merge-output-format", "mp4"])
-                if is_youtube_url(url):
+                if is_youtube_url(url): # YouTube requires specific format codes
                     if self.download_subs:
                         cmd.extend(["-f", "bestvideo+bestaudio", "--write-auto-sub", 
-                                  "--sub-lang", self.subtitle_lang, "--convert-subs", "srt", 
-                                  "--sub-format", "srt"])
+                                    "--sub-lang", self.subtitle_lang, "--convert-subs", "srt"])
                     else:
                         quality_id = window.combo_quality_video.currentText()
-                        if quality_id == "Best available":
-                            cmd.extend(["-f", "bestvideo+bestaudio"])
-                        else:
-                            video_code = quality_id.split()[0]
-                            cmd.extend(["-f", f"{video_code}+140"])
-                else:
+                        format_code = f"{quality_id.split()[0]}+140" if quality_id != "Best available" else "bestvideo+bestaudio"
+                        cmd.extend(["-f", format_code])
+                else: # For other sites, 'best' is more reliable
                     cmd.extend(["-f", "best"])
 
+            # --- Execute and Monitor Process ---
             try:
                 self.progress.emit(0)
+                if info["type"] != "full_playlist":
+                     current_video += 1
+                self.status.emit(f"⬇️ Downloading ({current_video}/{total_videos})...", "white")
+
                 current_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
-                                                 stderr=subprocess.PIPE, text=True)
-                current_playlist_video = 0
+                                                   stderr=subprocess.PIPE, text=True,
+                                                   encoding='utf-8', errors='replace')
                 
+                # Parse stdout for progress updates
                 for line in current_process.stdout:
-                    if stop_requested:
-                        break
-                        
-                    if info["type"] in ["full_playlist", "partial_playlist"]:
-                        if 'has already been downloaded' in line or '[download] 100%' in line:
-                            current_playlist_video += 1
-                            overall_current = current_video + current_playlist_video
-                            self.status.emit(f"⬇️ Completed video {overall_current}/{total_videos}", "white")
+                    if stop_requested: break
                     
                     match = re.search(r'\[download\]\s+(\d{1,3}\.?\d*)%', line)
                     if match:
-                        try:
-                            percent = float(match.group(1))
-                            self.progress.emit(percent)
-                        except ValueError:
-                            pass
-                            
-                stdout, stderr = current_process.communicate()
+                        self.progress.emit(float(match.group(1)))
+                    # Update count for completed playlist items
+                    if info["type"] == "full_playlist" and ('[download] 100%' in line or 'has already been downloaded' in line):
+                        current_video +=1
+                        self.status.emit(f"⬇️ Completed video {current_video}/{total_videos}", "white")
+
+                stdout, stderr = current_process.communicate() # Get final output
                 
-                if stop_requested:
-                    break
-                    
+                if stop_requested: break
+                
                 if current_process.returncode == 0:
-                    if info["type"] in ["full_playlist", "partial_playlist"]:
-                        current_video += info["count"]
-                        self.status.emit(f"✅ Playlist completed ({current_video}/{total_videos})", "green")
-                    else:
-                        self.status.emit(f"✅ Done ({current_video}/{total_videos})", "green")
+                     self.status.emit(f"✅ Done ({current_video}/{total_videos})", "green")
                 else:
-                    error_message = stderr.strip() or "Unknown error"
-                    if info["type"] in ["full_playlist", "partial_playlist"]:
-                        current_video += info["count"]
-                    self.status.emit(f"❌ Error: {error_message[:100]}...", "red")
+                    self.status.emit(f"❌ Error: {stderr.strip()[:100]}...", "red")
             except Exception as e:
-                if info["type"] in ["full_playlist", "partial_playlist"]:
-                    current_video += info["count"]
                 self.status.emit(f"❌ Exception: {str(e)}", "red")
         
+        # Signal that the entire process has finished
         self.finished.emit()
 
 class MediaCatcher(QMainWindow):
+    """
+    The main window of the application.
+    It sets up the UI, connects signals and slots, and manages the application state.
+    """
     def __init__(self):
         super().__init__()
         self.download_thread = None
         self.init_ui()
-        self.apply_theme("Blueberry")
+        self.apply_theme("Blueberry") # Set default theme
         
     def init_ui(self):
+        """Initializes all UI components and layouts."""
         self.setWindowTitle("Media Catcher")
-        self.setFixedSize(700, 700)
+        self.setFixedSize(700, 700) # Prevent resizing to maintain layout
         
-        # Set window icon - try multiple formats and locations for Flatpak
-        icon_loaded = False
+        # --- Application Icon Loading ---
+        # This extensive check ensures the icon is found in various environments, especially Flatpak.
+        self._load_app_icon()
         
-        # Try SVG first - Flatpak paths with correct naming
-        svg_paths = [
-            os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.svg"),
-            "/app/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
-            "/usr/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
-            os.path.expanduser("~/.local/share/icons/io.github.MarkusAureus.MediaCatcher.svg"),
-            "io.github.MarkusAureus.MediaCatcher.svg"
-        ]
-        
-        for svg_path in svg_paths:
-            if os.path.exists(svg_path):
-                print(f"Loading SVG icon from: {svg_path}")
-                icon = QIcon(svg_path)
-                if not icon.isNull():
-                    self.setWindowIcon(icon)
-                    icon_loaded = True
-                    break
-        
-        # Try PNG if SVG failed - Flatpak paths with correct naming
-        if not icon_loaded:
-            png_paths = [
-                os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.png"),
-                "/app/share/icons/hicolor/256x256/apps/io.github.MarkusAureus.MediaCatcher.png",
-                "/app/share/pixmaps/io.github.MarkusAureus.MediaCatcher.png",
-                "/usr/share/pixmaps/io.github.MarkusAureus.MediaCatcher.png",
-                os.path.expanduser("~/.local/share/icons/io.github.MarkusAureus.MediaCatcher.png"),
-                "io.github.MarkusAureus.MediaCatcher.png"
-            ]
-            
-            for png_path in png_paths:
-                if os.path.exists(png_path):
-                    print(f"Loading PNG icon from: {png_path}")
-                    icon = QIcon(png_path)
-                    if not icon.isNull():
-                        self.setWindowIcon(icon)
-                        icon_loaded = True
-                        break
-        
-        if not icon_loaded:
-            print("Warning: Could not load application icon")
-        
-        # Central widget
+        # --- Central Widget and Main Layout ---
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
-        # Main layout
         layout = QVBoxLayout(central_widget)
         layout.setSpacing(10)
         layout.setContentsMargins(20, 20, 20, 20)
         
-        # Title
+        # --- UI Element Creation ---
         title_label = QLabel("Media Catcher")
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("font-size: 20px; font-weight: bold; padding: 10px;")
         layout.addWidget(title_label)
         
-        # URL Input
         self.entry_url = QTextEdit()
         self.entry_url.setMaximumHeight(100)
-        self.entry_url.setPlaceholderText("🔗 Enter URL(s) or playlist link here...")
+        self.entry_url.setPlaceholderText("🔗 Enter URL(s), one per line...")
         layout.addWidget(self.entry_url)
         
+        # Mode, Playlist, and options widgets are created and added here...
+        # (Self-explanatory UI setup code omitted for brevity in this comment block)
+        self._create_ui_elements(layout)
+
+    def _create_ui_elements(self, layout):
+        """Helper function to create and lay out all the UI widgets."""
         # Mode selection
         mode_layout = QHBoxLayout()
         mode_layout.addStretch()
-        mode_label = QLabel("Mode:")
         self.combo_mode = QComboBox()
         self.combo_mode.addItems(["Audio", "Video"])
         self.combo_mode.setFixedWidth(200)
         self.combo_mode.currentTextChanged.connect(self.toggle_quality_options)
-        mode_layout.addWidget(mode_label)
+        mode_layout.addWidget(QLabel("Mode:"))
         mode_layout.addWidget(self.combo_mode)
         mode_layout.addStretch()
         layout.addLayout(mode_layout)
@@ -318,464 +256,221 @@ class MediaCatcher(QMainWindow):
         playlist_layout.addStretch()
         layout.addLayout(playlist_layout)
 
-        # Audio options
+        # --- Dynamic Options ---
+        # Audio Options
         self.audio_options_widget = QWidget()
         audio_layout = QVBoxLayout(self.audio_options_widget)
-        
-        format_layout = QHBoxLayout()
-        format_layout.addStretch()
-        format_label = QLabel("Audio Format:")
-        self.combo_audio_format = QComboBox()
-        self.combo_audio_format.addItems(["mp3", "wav", "aac"])
-        self.combo_audio_format.setFixedWidth(200)
+        self.combo_audio_format = self._create_combo_box(["mp3", "wav", "aac"], "Audio Format:", audio_layout)
         self.combo_audio_format.currentTextChanged.connect(self.update_audio_quality_options)
-        format_layout.addWidget(format_label)
-        format_layout.addWidget(self.combo_audio_format)
-        format_layout.addStretch()
-        audio_layout.addLayout(format_layout)
-        
-        quality_layout = QHBoxLayout()
-        quality_layout.addStretch()
-        quality_label = QLabel("Audio Quality:")
-        self.combo_quality_audio = QComboBox()
-        self.combo_quality_audio.addItems(["320K", "192K", "128K", "64K"])
-        self.combo_quality_audio.setCurrentText("192K")
-        self.combo_quality_audio.setFixedWidth(200)
-        quality_layout.addWidget(quality_label)
-        quality_layout.addWidget(self.combo_quality_audio)
-        quality_layout.addStretch()
-        audio_layout.addLayout(quality_layout)
-        
+        self.combo_quality_audio = self._create_combo_box(["320K", "192K", "128K", "64K"], "Audio Quality:", audio_layout, "192K")
         layout.addWidget(self.audio_options_widget)
         
-        # Video options
+        # Video Options
         self.video_options_widget = QWidget()
         video_layout = QVBoxLayout(self.video_options_widget)
-        
-        video_quality_layout = QHBoxLayout()
-        video_quality_layout.addStretch()
-        video_quality_label = QLabel("Video Quality:")
-        self.combo_quality_video = QComboBox()
-        self.combo_quality_video.addItems(["Best available", "137 (1080p)", "136 (720p)", 
-                                          "135 (480p)", "134 (360p)", "133 (240p)"])
-        self.combo_quality_video.setFixedWidth(200)
-        video_quality_layout.addWidget(video_quality_label)
-        video_quality_layout.addWidget(self.combo_quality_video)
-        video_quality_layout.addStretch()
-        video_layout.addLayout(video_quality_layout)
-        
-        subtitle_layout = QHBoxLayout()
-        subtitle_layout.addStretch()
+        self.combo_quality_video = self._create_combo_box(["Best available", "137 (1080p)", "136 (720p)", "135 (480p)", "134 (360p)"], "Video Quality:", video_layout)
         self.checkbox_subtitles = QCheckBox("Download subtitles")
         self.checkbox_subtitles.stateChanged.connect(self.update_video_quality_state)
-        subtitle_layout.addWidget(self.checkbox_subtitles)
-        subtitle_layout.addStretch()
-        video_layout.addLayout(subtitle_layout)
-        
-        sub_lang_layout = QHBoxLayout()
-        sub_lang_layout.addStretch()
-        sub_lang_label = QLabel("Subtitle Language:")
-        self.combo_sub_lang = QComboBox()
-        self.combo_sub_lang.addItems(["en (English)", "sk (Slovak)", "cs (Czech)", 
-                                     "de (German)", "fr (French)", "es (Spanish)", 
-                                     "ru (Russian)", "ja (Japanese)", "zh (Chinese)"])
-        self.combo_sub_lang.setFixedWidth(200)
-        sub_lang_layout.addWidget(sub_lang_label)
-        sub_lang_layout.addWidget(self.combo_sub_lang)
-        sub_lang_layout.addStretch()
-        video_layout.addLayout(sub_lang_layout)
-        
+        video_layout.addWidget(self.checkbox_subtitles, alignment=Qt.AlignCenter)
+        self.combo_sub_lang = self._create_combo_box(["en (English)", "sk (Slovak)", "cs (Czech)", "de (German)"], "Subtitle Language:", video_layout)
         layout.addWidget(self.video_options_widget)
         self.video_options_widget.hide()
-        
-        # Output folder
-        folder_layout = QHBoxLayout()
-        folder_layout.addStretch()
+
+        # --- Folder and Action Buttons ---
         self.folder_button = QPushButton("Select Output Folder")
-        self.folder_button.setFixedWidth(200)
         self.folder_button.clicked.connect(self.choose_folder)
-        folder_layout.addWidget(self.folder_button)
-        folder_layout.addStretch()
-        layout.addLayout(folder_layout)
-        
-        # Output label
-        self.label_output = QLabel(f"Saving to: {output_dir}")
-        self.label_output.setAlignment(Qt.AlignCenter)
+        self.label_output = QLabel(f"Saving to: {output_dir}", alignment=Qt.AlignCenter)
+        layout.addWidget(self.folder_button)
         layout.addWidget(self.label_output)
-        
-        # Buttons
+
         button_layout = QHBoxLayout()
-        button_layout.addStretch()
         self.download_button = QPushButton("Download")
-        self.download_button.setFixedWidth(120)
         self.download_button.clicked.connect(self.start_download)
         self.stop_button = QPushButton("Stop")
-        self.stop_button.setFixedWidth(120)
         self.stop_button.clicked.connect(self.stop_download)
         self.stop_button.setEnabled(False)
         self.clear_button = QPushButton("Clear")
-        self.clear_button.setFixedWidth(120)
         self.clear_button.clicked.connect(self.clear_and_reset)
-        
+        button_layout.addStretch()
         button_layout.addWidget(self.download_button)
         button_layout.addWidget(self.stop_button)
         button_layout.addWidget(self.clear_button)
         button_layout.addStretch()
         layout.addLayout(button_layout)
         
-        # Theme selection
-        theme_layout = QHBoxLayout()
-        theme_layout.addStretch()
-        theme_label = QLabel("Theme:")
-        self.combo_theme = QComboBox()
-        self.combo_theme.addItems(list(THEMES.keys()))
-        self.combo_theme.setCurrentText("Blueberry")
-        self.combo_theme.setFixedWidth(200)
+        # --- Theme, Progress Bar, and Status ---
+        self.combo_theme = self._create_combo_box(list(THEMES.keys()), "Theme:", layout, "Blueberry", True)
         self.combo_theme.currentTextChanged.connect(self.on_theme_change)
-        theme_layout.addWidget(theme_label)
-        theme_layout.addWidget(self.combo_theme)
-        theme_layout.addStretch()
-        layout.addLayout(theme_layout)
-        
-        # Progress bar
-        progress_container = QHBoxLayout()
-        progress_container.addStretch()
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedWidth(400)
-        progress_container.addWidget(self.progress_bar)
-        progress_container.addStretch()
-        layout.addLayout(progress_container)
-        
-        # Progress label
-        self.progress_label = QLabel("Progress: 0%")
-        self.progress_label.setAlignment(Qt.AlignCenter)
+
+        self.progress_bar = QProgressBar(textVisible=False)
+        self.progress_label = QLabel("Progress: 0%", alignment=Qt.AlignCenter)
+        self.status_label = QLabel("", alignment=Qt.AlignCenter)
+        layout.addWidget(self.progress_bar)
         layout.addWidget(self.progress_label)
-        
-        # Status label
-        self.status_label = QLabel("")
-        self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
-        
         layout.addStretch()
+
+    def _create_combo_box(self, items, label_text, parent_layout, default_text=None, centered=False):
+        """Helper to create a labeled QComboBox and add it to a layout."""
+        layout = QHBoxLayout()
+        combo = QComboBox()
+        combo.addItems(items)
+        combo.setFixedWidth(200)
+        if default_text: combo.setCurrentText(default_text)
         
+        if centered: layout.addStretch()
+        layout.addWidget(QLabel(label_text))
+        layout.addWidget(combo)
+        if centered: layout.addStretch()
+
+        parent_layout.addLayout(layout)
+        return combo
+
+    def _load_app_icon(self):
+        """Loads the application icon, checking multiple paths for compatibility."""
+        icon_paths = [
+            "/app/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
+            os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.svg"),
+            "/app/share/icons/hicolor/256x256/apps/io.github.MarkusAureus.MediaCatcher.png",
+             os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.png")
+        ]
+        for path in icon_paths:
+            if os.path.exists(path):
+                icon = QIcon(path)
+                if not icon.isNull():
+                    self.setWindowIcon(icon)
+                    return
+        print("Warning: Could not load application icon.")
+
     def apply_theme(self, theme_name):
+        """Applies a theme to the application using QSS stylesheets."""
         theme = THEMES.get(theme_name, THEMES["Blueberry"])
+        is_dark = theme["appearance"] == "Dark"
         
-        # Base stylesheet
-        if theme["appearance"] == "Dark":
-            self.setStyleSheet(f"""
-                QMainWindow {{
-                    background-color: {theme["bg_color"]};
-                }}
-                QWidget {{
-                    background-color: {theme["bg_color"]};
-                    color: white;
-                }}
-                QTextEdit {{
-                    background-color: #2b2b2b;
-                    border: 1px solid #555;
-                    border-radius: 5px;
-                    padding: 5px;
-                    color: white;
-                }}
-                QComboBox {{
-                    background-color: #2b2b2b;
-                    border: 1px solid #555;
-                    border-radius: 5px;
-                    padding: 5px;
-                    color: white;
-                }}
-                QComboBox::drop-down {{
-                    border: none;
-                }}
-                QComboBox::down-arrow {{
-                    image: none;
-                    border-left: 5px solid transparent;
-                    border-right: 5px solid transparent;
-                    border-top: 5px solid white;
-                    margin-right: 5px;
-                }}
-                QCheckBox {{
-                    color: white;
-                }}
-                QCheckBox::indicator {{
-                    width: 18px;
-                    height: 18px;
-                }}
-                QCheckBox::indicator:unchecked {{
-                    background-color: #2b2b2b;
-                    border: 1px solid #555;
-                    border-radius: 3px;
-                }}
-                QCheckBox::indicator:checked {{
-                    background-color: {theme["button_color"]};
-                    border: 1px solid {theme["button_color"]};
-                    border-radius: 3px;
-                }}
-                QProgressBar {{
-                    background-color: #2b2b2b;
-                    border: 1px solid #555;
-                    border-radius: 5px;
-                    text-align: center;
-                }}
-                QProgressBar::chunk {{
-                    background-color: {theme["button_color"]};
-                    border-radius: 5px;
-                }}
-                QPushButton {{
-                    background-color: {theme["button_color"]};
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    padding: 8px 16px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {theme["hover_color"]};
-                }}
-                QPushButton:pressed {{
-                    background-color: {theme["hover_color"]};
-                }}
-                QPushButton:disabled {{
-                    background-color: #555;
-                    color: #999;
-                }}
-                QLabel {{
-                    color: white;
-                }}
-            """)
-        else:
-            self.setStyleSheet(f"""
-                QMainWindow {{
-                    background-color: {theme["bg_color"]};
-                }}
-                QWidget {{
-                    background-color: {theme["bg_color"]};
-                    color: black;
-                }}
-                QTextEdit {{
-                    background-color: white;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
-                    padding: 5px;
-                    color: black;
-                }}
-                QComboBox {{
-                    background-color: white;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
-                    padding: 5px;
-                    color: black;
-                }}
-                QComboBox::drop-down {{
-                    border: none;
-                }}
-                QComboBox::down-arrow {{
-                    image: none;
-                    border-left: 5px solid transparent;
-                    border-right: 5px solid transparent;
-                    border-top: 5px solid black;
-                    margin-right: 5px;
-                }}
-                QCheckBox {{
-                    color: black;
-                }}
-                QCheckBox::indicator {{
-                    width: 18px;
-                    height: 18px;
-                }}
-                QCheckBox::indicator:unchecked {{
-                    background-color: white;
-                    border: 1px solid #ddd;
-                    border-radius: 3px;
-                }}
-                QCheckBox::indicator:checked {{
-                    background-color: {theme["button_color"]};
-                    border: 1px solid {theme["button_color"]};
-                    border-radius: 3px;
-                }}
-                QProgressBar {{
-                    background-color: #f0f0f0;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
-                    text-align: center;
-                }}
-                QProgressBar::chunk {{
-                    background-color: {theme["button_color"]};
-                    border-radius: 5px;
-                }}
-                QPushButton {{
-                    background-color: {theme["button_color"]};
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    padding: 8px 16px;
-                    font-weight: bold;
-                }}
-                QPushButton:hover {{
-                    background-color: {theme["hover_color"]};
-                }}
-                QPushButton:pressed {{
-                    background-color: {theme["hover_color"]};
-                }}
-                QPushButton:disabled {{
-                    background-color: #ddd;
-                    color: #999;
-                }}
-                QLabel {{
-                    color: black;
-                }}
-            """)
-        
-        # Special styling for buttons
-        self.stop_button.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-            QPushButton:disabled {
-                background-color: #555;
-                color: #999;
-            }
-        """)
-        
-        self.clear_button.setStyleSheet("""
-            QPushButton {
-                background-color: #444;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #666;
-            }
-        """)
-    
+        # Stylesheet templates for dark and light modes
+        # QSS allows for CSS-like styling of Qt widgets.
+        base_style = """
+            QMainWindow, QWidget {{ background-color: {bg_color}; color: {text_color}; }}
+            QTextEdit {{ background-color: {input_bg}; border: 1px solid #555; border-radius: 5px; padding: 5px; color: {text_color}; }}
+            QComboBox {{ background-color: {input_bg}; border: 1px solid #555; border-radius: 5px; padding: 5px; color: {text_color}; }}
+            QComboBox::drop-down {{ border: none; }}
+            QComboBox::down-arrow {{ border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid {text_color}; margin-right: 5px; }}
+            QCheckBox::indicator:unchecked {{ background-color: {input_bg}; border: 1px solid #555; border-radius: 3px; }}
+            QCheckBox::indicator:checked {{ background-color: {button_color}; border: 1px solid {button_color}; border-radius: 3px; }}
+            QProgressBar {{ background-color: {input_bg}; border: 1px solid #555; border-radius: 5px; text-align: center; }}
+            QProgressBar::chunk {{ background-color: {button_color}; border-radius: 5px; }}
+            QPushButton {{ background-color: {button_color}; color: white; border: none; border-radius: 5px; padding: 8px 16px; font-weight: bold; }}
+            QPushButton:hover {{ background-color: {hover_color}; }}
+            QPushButton:disabled {{ background-color: #555; color: #999; }}
+        """
+        self.setStyleSheet(base_style.format(
+            bg_color=theme["bg_color"],
+            text_color="white" if is_dark else "black",
+            input_bg="#2b2b2b" if is_dark else "white",
+            button_color=theme["button_color"],
+            hover_color=theme["hover_color"]
+        ))
+        # Specific overrides for certain buttons
+        self.stop_button.setStyleSheet("QPushButton { background-color: #dc3545; } QPushButton:hover { background-color: #c82333; }")
+        self.clear_button.setStyleSheet("QPushButton { background-color: #444; } QPushButton:hover { background-color: #666; }")
+
+    # --- SLOTS (Event Handlers) ---
+
     def on_theme_change(self, theme_name):
+        """Called when the user selects a new theme from the dropdown."""
         self.apply_theme(theme_name)
     
     def toggle_quality_options(self, choice):
-        if choice == "Audio":
-            self.audio_options_widget.show()
-            self.video_options_widget.hide()
-        else:
-            self.audio_options_widget.hide()
-            self.video_options_widget.show()
-    
+        """Shows/hides audio or video options based on the selected mode."""
+        self.audio_options_widget.setVisible(choice == "Audio")
+        self.video_options_widget.setVisible(choice == "Video")
+        
     def update_audio_quality_options(self, format_choice):
-        if format_choice in ["mp3", "aac"]:
-            self.combo_quality_audio.clear()
+        """Disables the quality dropdown for lossless formats like WAV."""
+        is_lossless = format_choice == "wav"
+        self.combo_quality_audio.clear()
+        if is_lossless:
+            self.combo_quality_audio.addItems(["N/A (lossless)"])
+        else:
             self.combo_quality_audio.addItems(["320K", "192K", "128K", "64K"])
             self.combo_quality_audio.setCurrentText("192K")
-            self.combo_quality_audio.setEnabled(True)
-        elif format_choice == "wav":
-            self.combo_quality_audio.clear()
-            self.combo_quality_audio.addItems(["N/A (lossless)"])
-            self.combo_quality_audio.setEnabled(False)
+        self.combo_quality_audio.setEnabled(not is_lossless)
     
     def update_video_quality_state(self):
+        """Disables video quality selection when subtitles are checked (requires best streams)."""
+        self.combo_quality_video.setEnabled(not self.checkbox_subtitles.isChecked())
         if self.checkbox_subtitles.isChecked():
             self.combo_quality_video.setCurrentText("Best available")
-            self.combo_quality_video.setEnabled(False)
-        else:
-            self.combo_quality_video.setEnabled(True)
     
     def choose_folder(self):
+        """Opens a dialog to select the download destination."""
         global output_dir
         folder = QFileDialog.getExistingDirectory(self, "Select Output Folder", output_dir)
         if folder:
             output_dir = folder
             self.label_output.setText(f"Saving to: {output_dir}")
-    
+            
     def clear_and_reset(self):
+        """Resets input fields and status labels."""
         self.entry_url.clear()
         self.status_label.setText("")
         self.progress_bar.setValue(0)
         self.progress_label.setText("Progress: 0%")
-    
+        
     def start_download(self):
+        """Validates input and starts the DownloadThread."""
         global is_downloading, stop_requested
-        
         urls_text = self.entry_url.toPlainText().strip()
-        
         if not urls_text:
-            self.status_label.setText("❌ Please enter a valid URL")
-            self.status_label.setStyleSheet("color: red;")
+            self.update_status("❌ Please enter a valid URL", "red")
             return
         
-        user_urls = [line.strip() for line in urls_text.splitlines() if line.strip()]
-        
-        if not user_urls:
-            self.status_label.setText("❌ Please enter a valid URL")
-            self.status_label.setStyleSheet("color: red;")
-            return
-        
-        # Update button states
-        is_downloading = True
-        stop_requested = False
+        is_downloading, stop_requested = True, False
         self.download_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         
-        # Get settings
-        mode = self.combo_mode.currentText()
-        download_playlist = self.checkbox_playlist.isChecked()
-        download_subs = self.checkbox_subtitles.isChecked()
-        subtitle_lang = self.combo_sub_lang.currentText().split()[0]
-        
-        # Create and start download thread
         self.download_thread = DownloadThread(
-            user_urls, mode, download_playlist, 
-            download_subs, subtitle_lang, output_dir
+            urls=[line.strip() for line in urls_text.splitlines() if line.strip()],
+            mode=self.combo_mode.currentText(),
+            download_playlist=self.checkbox_playlist.isChecked(),
+            download_subs=self.checkbox_subtitles.isChecked(),
+            subtitle_lang=self.combo_sub_lang.currentText().split()[0],
+            output_dir=output_dir
         )
         self.download_thread.progress.connect(self.update_progress)
         self.download_thread.status.connect(self.update_status)
         self.download_thread.finished.connect(self.download_finished)
         self.download_thread.start()
-    
+        
     def stop_download(self):
-        global current_process, stop_requested
+        """Requests the download to stop and terminates the process."""
+        global stop_requested
         stop_requested = True
+        if current_process:
+            current_process.terminate() # Send SIGTERM
+        self.update_status("⏹️ Download stopped by user", "orange")
+        self.download_finished() # Reset UI state immediately
         
-        if current_process and current_process.poll() is None:
-            try:
-                current_process.terminate()
-                QTimer.singleShot(500, lambda: current_process.kill() if current_process.poll() is None else None)
-                
-                self.status_label.setText("⏹️ Download stopped by user")
-                self.status_label.setStyleSheet("color: orange;")
-                self.progress_bar.setValue(0)
-                self.progress_label.setText("Progress: 0%")
-            except Exception as e:
-                print(f"Error stopping process: {e}")
-        
-        self.download_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
-    
     def update_progress(self, percent):
+        """Updates the progress bar and label."""
         self.progress_bar.setValue(int(percent))
         self.progress_label.setText(f"Progress: {percent:.1f}%")
-    
+        
     def update_status(self, message, color):
+        """Updates the main status label with a given message and color."""
         self.status_label.setText(message)
         self.status_label.setStyleSheet(f"color: {color};")
-    
+        
     def download_finished(self):
-        global is_downloading
-        is_downloading = False
+        """Resets the UI state after a download completes or is stopped."""
+        global is_downloading, stop_requested
+        is_downloading, stop_requested = False, False
         self.download_button.setEnabled(True)
         self.stop_button.setEnabled(False)
+        self.progress_bar.setValue(0)
 
-# === Helper Functions ===
+# === Helper Functions for URL Analysis ===
+
 def is_youtube_url(url):
     hostname = urlparse(url).hostname or ""
     return any(domain in hostname for domain in ["youtube.com", "youtu.be"])
@@ -791,75 +486,30 @@ def get_video_index_from_url(url):
     return int(match.group(1)) if match else 1
 
 def get_playlist_count(playlist_url):
+    """Runs a quick yt-dlp command to get the number of items in a playlist."""
     try:
-        result = subprocess.run([
-            "yt-dlp", "--flat-playlist", "--print", "%(title)s", playlist_url
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        videos = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
-        return len(videos)
-    except Exception as e:
-        print(f"Playlist count error: {e}")
-        return 0
+        # --flat-playlist is very fast as it doesn't fetch metadata for each video.
+        result = subprocess.run(["yt-dlp", "--flat-playlist", "-J", playlist_url], 
+                                capture_output=True, text=True, check=True)
+        playlist_data = json.loads(result.stdout)
+        return len(playlist_data.get("entries", []))
+    except (subprocess.CalledProcessError, json.JSONDecodeError, Exception) as e:
+        print(f"Could not get playlist count for {playlist_url}: {e}")
+        return 0 # Return 0 indicates an error or an empty/invalid playlist
 
-# === Main ===
+# --- Application Entry Point ---
 if __name__ == "__main__":
-    # Create QApplication first
     app = QApplication(sys.argv)
     
-    # Set application metadata for Flatpak
+    # Set metadata for better integration with desktop environments (e.g., Wayland, Flatpak)
     app.setApplicationName("MediaCatcher")
     app.setOrganizationName("MarkusAureus")
     app.setApplicationDisplayName("Media Catcher")
     app.setDesktopFileName("io.github.MarkusAureus.MediaCatcher")
     
-    # Set application icon with multiple fallbacks for Flatpak
-    icon_loaded = False
-    
-    # Try SVG icons with correct Flatpak naming
-    svg_paths = [
-        os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.svg"),
-        "/app/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
-        "/usr/share/icons/hicolor/scalable/apps/io.github.MarkusAureus.MediaCatcher.svg",
-        os.path.expanduser("~/.local/share/icons/io.github.MarkusAureus.MediaCatcher.svg"),
-        "io.github.MarkusAureus.MediaCatcher.svg"
-    ]
-    
-    for svg_path in svg_paths:
-        if os.path.exists(svg_path):
-            print(f"Setting app SVG icon from: {svg_path}")
-            icon = QIcon(svg_path)
-            if not icon.isNull():
-                app.setWindowIcon(icon)
-                icon_loaded = True
-                break
-    
-    # Try PNG if SVG failed with correct Flatpak naming
-    if not icon_loaded:
-        png_paths = [
-            os.path.join(SCRIPT_DIR, "io.github.MarkusAureus.MediaCatcher.png"),
-            "/app/share/icons/hicolor/256x256/apps/io.github.MarkusAureus.MediaCatcher.png",
-            "/app/share/pixmaps/io.github.MarkusAureus.MediaCatcher.png",
-            "/usr/share/pixmaps/io.github.MarkusAureus.MediaCatcher.png",
-            os.path.expanduser("~/.local/share/icons/io.github.MarkusAureus.MediaCatcher.png"),
-            "io.github.MarkusAureus.MediaCatcher.png"
-        ]
-        
-        for png_path in png_paths:
-            if os.path.exists(png_path):
-                print(f"Setting app PNG icon from: {png_path}")
-                icon = QIcon(png_path)
-                if not icon.isNull():
-                    app.setWindowIcon(icon)
-                    icon_loaded = True
-                    break
-    
-    if not icon_loaded:
-        print("Warning: Could not set application icon")
-    
-    # Set style
+    # Set application style for consistency across platforms
     app.setStyle("Fusion")
     
-    # Create and show window
     window = MediaCatcher()
     window.show()
     
