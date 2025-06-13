@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
 
-# -----------------------------------------------------------------------------
-# -- MEDIA CATCHER - A PYQT5-BASED YT-DLP FRONTEND                           --
-# -- Author: Markus Aureus                                                   --
-# -- Date: [Date of Last Edit]                                               --
-# -- Description: A cross-platform desktop application for downloading media --
-# --              using yt-dlp. Built with PyQt5 for a native look and feel, --
-# --              featuring theming, and robust playlist handling.           --
-# -----------------------------------------------------------------------------
-
 # --- Standard Library Imports ---
 import sys
 import os
