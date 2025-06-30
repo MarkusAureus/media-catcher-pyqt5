@@ -181,6 +181,3 @@ This tool is for educational purposes and personal use only. Please respect copy
 
 For issues, questions, or suggestions, please open an issue on GitHub.
 
----
-
-Made with ❤️ by Marek Kožuch
